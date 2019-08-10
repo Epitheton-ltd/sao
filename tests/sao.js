@@ -826,51 +826,51 @@
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 12, 10, 30, 20, 0).valueOf());
+                new Date(Date.UTC(2010, 0, 12, 10, 30, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0, -1));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2009, 0, 12, 10, 30, 20, 0).valueOf());
+                new Date(Date.UTC(2009, 0, 12, 10, 30, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0, 0, 12));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2011, 0, 12, 10, 30, 20, 0).valueOf());
+                new Date(Date.UTC(2011, 0, 12, 10, 30, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0, 0, 0, -7));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 5, 10, 30, 20, 0).valueOf());
+                new Date(Date.UTC(2010, 0, 5, 10, 30, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0,
                     0, 0, 0, 12));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 12, 22, 30, 20, 0).valueOf());
+                new Date(Date.UTC(2010, 0, 12, 22, 30, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20,
                     0, 0, 0, 0, 0, -30));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 12, 10, 0, 20, 0).valueOf());
+                new Date(Date.UTC(2010, 0, 12, 10, 0, 20, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20,
                     0, 0, 0, 0, 0, 0, 30));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 12, 10, 30, 50, 0).valueOf());
+                new Date(Date.UTC(2010, 0, 12, 10, 30, 50, 0)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20,
                     0, 0, 0, 0, 0, 0, 0, 2000));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 0, 12, 10, 30, 20, 2).valueOf());
+                new Date(Date.UTC(2010, 0, 12, 10, 30, 20, 2)).valueOf());
 
         eval_ = new Sao.PYSON.Encoder().encode(
                 new Sao.PYSON.DateTime(2010, 2, 22, 10, 30, 20, 2000));
         QUnit.strictEqual(new Sao.PYSON.Decoder().decode(eval_).valueOf(),
-                new Date(2010, 1, 22, 10, 30, 20, 2).valueOf());
+                new Date(Date.UTC(2010, 1, 22, 10, 30, 20, 2)).valueOf());
 
         QUnit.strictEqual(new Sao.PYSON.DateTime(2010, 1, 12, 10, 30, 20, 0,
                 -1, 12, -7, 2, 15, 30, 1).toString(),
@@ -1451,7 +1451,12 @@
                     ['spam', 'Spam'],
                     ['ham', 'Ham']
                 ]
-            }
+            },
+            'many2one': {
+                'string': "Many2One",
+                'name': 'many2one',
+                'type': 'many2one',
+            },
         });
         var c = function(value) {
             value.clause = true;
@@ -1492,6 +1497,9 @@
             ['OR', c(['name', 'ilike', '%John%']),
                 c(['name', 'ilike', '%Jane%'])
             ]],
+        [[c(['Many2One', null, 'John'])], [['many2one', 'ilike', '%John%']]],
+        [[c(['Many2One', null, ['John', 'Jane']])],
+            [['many2one.rec_name', 'in', ['John', 'Jane']]]],
         [[[c(['John'])]], [[['rec_name', 'ilike', '%John%']]]],
         ].forEach(function(test) {
             var value = test[0];
@@ -1690,7 +1698,12 @@
                     ['spam', 'Spam'],
                     ['ham', 'Ham']
                 ]
-            }
+            },
+            'many2one': {
+                'string': "Many2One",
+                'name': 'many2one',
+                'type': 'many2one',
+            },
         });
 
         [
@@ -1735,7 +1748,9 @@
         [[['selection', '!=', 'male']], 'Selection: !Male'],
         [[['reference', 'ilike', '%foo%']], 'Reference: foo'],
         [[['reference', 'ilike', '%bar%', 'spam']], 'Reference: Spam,bar'],
-        [[['reference', 'in', ['foo', 'bar']]], 'Reference: foo;bar']
+        [[['reference', 'in', ['foo', 'bar']]], 'Reference: foo;bar'],
+        [[['many2one', 'ilike', '%John%']], 'Many2One: John'],
+        [[['many2one.rec_name', 'in', ['John', 'Jane']]], 'Many2One: John;Jane'],
         ].forEach(function(test) {
             var value = test[0];
             var result = test[1];
@@ -2201,6 +2216,10 @@
         QUnit.ok(!unique_value(domain)[0]);
         domain = [['a.b', '=', 1]];
         QUnit.ok(!unique_value(domain)[0]);
+        domain = [['a.id', '=', 1, 'model']];
+        QUnit.ok(compare(unique_value(domain), [true, '=', ['model', 1]]));
+        domain = [['a.b.id', '=', 1, 'model']];
+        QUnit.ok(compare(unique_value(domain), [false, null, null]));
     });
 
     QUnit.test('DomainInversion evaldomain', function() {
@@ -2344,6 +2363,18 @@
                 [['x', 'child_of', [1]]]),
             'localize_domain(' + JSON.stringify(domain) + ', \'x\')');
 
+        domain = [['x.y', 'child_of', [1], 'parent']];
+        QUnit.ok(compare(
+            localize_domain(domain, 'x'),
+            [['y', 'child_of', [1], 'parent']]),
+            'localize_domain(' + JSON.stringify(domain) + ', \'x\')');
+
+        domain = [['x.y.z', 'child_of', [1], 'parent', 'model']];
+        QUnit.ok(compare(
+            localize_domain(domain, 'x'),
+            [['y.z', 'child_of', [1], 'parent', 'model']]),
+            'localize_domain(' + JSON.stringify(domain) + ', \'x\')');
+
         domain = [['x', 'child_of', [1], 'y']];
         QUnit.ok(compare(localize_domain(domain, 'x'),
                 [['y', 'child_of', [1]]]),
@@ -2365,6 +2396,62 @@
                 [['b.c', '=', 1, 'z']]),
             'localize_domain(' + JSON.stringify(domain) + ', \'x\')');
 
+    });
+
+    QUnit.test('DomainInversion.prepare_reference_domain', function() {
+        var domain_inversion = new Sao.common.DomainInversion();
+        var prepare_reference_domain = domain_inversion
+            .prepare_reference_domain.bind(domain_inversion);
+        var compare = Sao.common.compare;
+
+        var domain = [['x', 'like', 'A%']];
+        QUnit.ok(compare(
+            prepare_reference_domain(domain, 'x'),
+            [['x', 'like', 'A%']]));
+
+        domain = [['x.y', 'like', 'A%', 'model']];
+        QUnit.ok(compare(
+            prepare_reference_domain(domain, 'x'),
+            [['y', 'like', 'A%']]));
+
+        domain = [['x.y', 'child_of', [1], 'model', 'parent']];
+        QUnit.ok(compare(
+            prepare_reference_domain(domain, 'x'),
+            [['y', 'child_of', [1], 'parent']]));
+    });
+
+    QUnit.test('DomainInversion.extract_reference_models', function() {
+        var domain_inversion = new Sao.common.DomainInversion();
+        var extract_reference_models = domain_inversion
+            .extract_reference_models.bind(domain_inversion);
+        var compare = Sao.common.compare;
+
+        var domain = [['x', 'like', 'A%']];
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'x'),
+            []));
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'y'),
+            []));
+
+        domain = [['x', 'like', 'A%', 'model']];
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'x'),
+            ['model']));
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'y'),
+            []));
+
+        domain = ['OR',
+            ['x', 'like', 'A%', 'model_A'],
+            ['x', 'like', 'B%', 'model_B']
+        ];
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'x'),
+            ['model_A', 'model_B']));
+        QUnit.ok(compare(
+            extract_reference_models(domain, 'y'),
+            []));
     });
 
     QUnit.test('DomainParser.completion', function() {

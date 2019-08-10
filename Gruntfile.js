@@ -1,8 +1,8 @@
 module.exports = function(grunt) {
 
   var _ = grunt.util._;
-  var locales = ["bg", "ca", "cs", "de", "es", "es_419", "fr", "fa", "hu_HU",
-      "it_IT", "lo", "lt", "nl", "pl", "pt_BR", "ru", "sl", "zh_CN"];
+  var locales = ["bg", "ca", "cs", "de", "es", "es_419", "fr", "fa", "hu",
+      "it", "lo", "lt", "nl", "pl", "pt", "ru", "sl", "zh_CN"];
   var jsfiles = [
       'src/sao.js',
       'src/rpc.js',
@@ -16,12 +16,14 @@ module.exports = function(grunt) {
       'src/view/tree.js',
       'src/view/graph.js',
       'src/view/calendar.js',
+      'src/view/list_form.js',
       'src/action.js',
       'src/common.js',
       'src/window.js',
       'src/wizard.js',
       'src/board.js',
-      'src/bus.js'
+      'src/bus.js',
+      'src/plugins.js'
   ];
 
   // Project configuration.
@@ -124,6 +126,14 @@ module.exports = function(grunt) {
         }
     },
     qunit: {
+        options: {
+            puppeteer: {
+                headless: true,
+                args: [
+                    '--no-sandbox',
+                ],
+            },
+        },
         all: ['tests/*.html']
     }
   });

@@ -638,11 +638,6 @@
                 return;
             }
             var domain = field.get_domain(record);
-            if (field.description.type == 'reference') {
-                // The domain on reference field is not only based on the
-                // selection so the selection can not be filtered.
-                domain = [];
-            }
             if (!('relation' in this.attributes)) {
                 var change_with = this.attributes.selection_change_with || [];
                 var value = record._get_on_change_args(change_with);
@@ -707,12 +702,30 @@
         if (jQuery.isEmptyObject(domain)) {
             return;
         }
+
         var inversion = new Sao.common.DomainInversion();
-        this.selection = this.selection.filter(function(value) {
+        var _value_evaluator = function(value) {
             var context = {};
             context[this.field_name] = value[0];
             return inversion.eval_domain(domain, context);
-        }.bind(this));
+        }.bind(this);
+
+        var _model_evaluator = function(allowed_models) {
+            return function(value) {
+                return ~allowed_models.indexOf(value[0]) ||
+                    jQuery.isEmptyObject(allowed_models);
+            };
+        };
+
+        var evaluator;
+        if (field.description.type == 'reference') {
+            var allowed_models = field.get_models(record);
+            evaluator = _model_evaluator(allowed_models);
+        } else {
+            evaluator = _value_evaluator;
+        }
+
+        this.selection = this.selection.filter(evaluator);
     };
     Sao.common.selection_mixin.get_inactive_selection = function(value) {
         if (!this.attributes.relation) {
@@ -1653,12 +1666,16 @@
                     var operator = clause[1];
                     var value = clause[2];
                     var field = this.strings[clause[0].toLowerCase()];
+                    var field_name = field.name;
 
                     var target = null;
                     if (field.type == 'reference') {
                         var split = this.split_target_value(field, value);
                         target = split[0];
                         value = split[1];
+                        if (target) {
+                            field_name += '.rec_name';
+                        }
                     }
 
                     if (!operator) {
@@ -1682,8 +1699,8 @@
                             var lvalue = this.convert_value(field, values[0]);
                             var rvalue = this.convert_value(field, values[1]);
                             result.push([
-                                    this._clausify([field.name, '>=', lvalue]),
-                                    this._clausify([field.name, '<=', rvalue])
+                                    this._clausify([field_name, '>=', lvalue]),
+                                    this._clausify([field_name, '<=', rvalue])
                                     ]);
                             return;
                         }
@@ -1692,6 +1709,10 @@
                         value = value.map(function(v) {
                             return this.convert_value(field, v);
                         }.bind(this));
+                        if (~['many2one', 'one2many', 'many2many', 'one2one',
+                            'many2many', 'one2one'].indexOf(field.type)) {
+                            field_name += '.rec_name';
+                        }
                     } else {
                         value = this.convert_value(field, value);
                     }
@@ -1699,11 +1720,11 @@
                         value = this.likify(value);
                     }
                     if (target) {
-                        result.push(this._clausify([field.name + '.rec_name',
-                                    operator, value, target]));
+                        result.push(this._clausify(
+                            [field_name, operator, value, target]));
                     } else {
                         result.push(this._clausify(
-                                    [field.name, operator, value]));
+                            [field_name, operator, value]));
                     }
                 }
             }.bind(this));
@@ -2199,6 +2220,10 @@
                 return domain;
             } else if (this.is_leaf(domain)) {
                 if (domain[1].contains('child_of')) {
+                    if (domain[0].split('.').length > 1) {
+                        var target = domain[0].split('.').slice(1).join('.');
+                        return [target].concat(domain.slice(1));
+                    }
                     if (domain.length == 3) {
                         return domain;
                     } else {
@@ -2216,6 +2241,57 @@
                 return domain.map(function(e) {
                     return this.localize_domain(e, field_name, strip_target);
                 }.bind(this));
+            }
+        },
+        prepare_reference_domain: function(domain, reference) {
+            if (~['AND', 'OR'].indexOf(domain)) {
+                return domain;
+            } else if (this.is_leaf(domain)) {
+                if ((domain[0].split('.').length > 1) &&
+                        (domain.length > 3)) {
+                    var parts = domain[0].split('.');
+                    var local_name = parts[0];
+                    var target_name = parts.slice(1).join('.');
+
+                    if (local_name == reference) {
+                        var where = [];
+                        where.push(target_name);
+                        where = where.concat(
+                            domain.slice(1, 3), domain.slice(4));
+                        return where;
+                    }
+                    return domain;
+                }
+                return domain;
+            } else {
+                return domain.map(function(d) {
+                    return this.prepare_reference_domain(d, reference);
+                }.bind(this));
+            }
+        },
+        extract_reference_models: function(domain, field_name) {
+            if (~['AND', 'OR'].indexOf(domain)) {
+                return [];
+            } else if (this.is_leaf(domain)) {
+                var local_part = domain[0].split('.', 1)[0];
+                if ((local_part == field_name) &&
+                        (domain.length > 3)) {
+                    return [domain[3]];
+                }
+                return [];
+            } else {
+                var models = [];
+                domain.map(function(d) {
+                    var new_models = this.extract_reference_models(
+                        d, field_name);
+                    for (var i=0, len=new_models.length; i < len; i++) {
+                        var model = new_models[i];
+                        if (!~models.indexOf(model)) {
+                            models.push(model);
+                        }
+                    }
+                }.bind(this));
+                return models;
             }
         },
         simplify: function(domain) {
@@ -2272,13 +2348,22 @@
         },
         unique_value: function(domain) {
             if ((domain instanceof Array) &&
-                    (domain.length == 1) &&
-                    !domain[0][0].contains('.') &&
-                    (domain[0][1] == '=')) {
-                return [true, domain[0][1], domain[0][2]];
-            } else {
-                return [false, null, null];
+                    (domain.length == 1)) {
+                domain = domain[0];
+                var name = domain[0];
+                var value = domain[2];
+                var count = 0;
+                if (domain.length == 4 && name.endsWith('.id')) {
+                    count = 1;
+                    var model = domain[3];
+                    value = [model, value];
+                }
+                if ((name.split('.').length - 1) == count &&
+                        (domain[1] == '=')) {
+                    return [true, domain[1], value];
+                }
             }
+            return [false, null, null];
         },
         parse: function(domain) {
             var And = Sao.common.DomainInversion.And;
@@ -2669,7 +2754,7 @@
         },
         _convert: function(data) {
             var xml = jQuery.parseXML(data);
-            jQuery(xml).find('svg').attr('fill', Sao.config.icon_color);
+            jQuery(xml).find('svg').attr('fill', Sao.config.icon_colors[0]);
             data = new XMLSerializer().serializeToString(xml);
             var blob = new Blob([data],
                 {type: 'image/svg+xml'});
@@ -3054,7 +3139,7 @@
                 .append(jQuery('<p/>')
                     .append(jQuery('<a/>', {
                         'class': 'btn btn-link',
-                        href: Sao.config.roundup.url,
+                        href: Sao.config.bug_url,
                         target: '_blank'
                     }).text(Sao.i18n.gettext('Report Bug')))));
             jQuery('<button/>', {
@@ -3165,15 +3250,18 @@
             // We must set the overflow of the treeview and modal-body
             // containing the input to visible to prevent vertical scrollbar
             // inherited from the auto overflow-x
+            // Idem when in navbar collapse for the overflow-y
             // (see http://www.w3.org/TR/css-overflow-3/#overflow-properties)
             this.dropdown.on('hide.bs.dropdown', function() {
                 this.input.focus();
                 this.input.closest('.treeview').css('overflow', '');
                 this.input.closest('.modal-body').css('overflow', '');
+                this.input.closest('.navbar-collapse.in').css('overflow-y', '');
             }.bind(this));
             this.dropdown.on('show.bs.dropdown', function() {
                 this.input.closest('.treeview').css('overflow', 'visible');
                 this.input.closest('.modal-body').css('overflow', 'visible');
+                this.input.closest('.navbar-collapse.in').css('overflow-y', 'visible');
             }.bind(this));
         },
         set_actions: function(actions, action_activated) {
@@ -3448,20 +3536,21 @@
     };
 
     Sao.common.get_input_data = function(input, callback, char_) {
-        function read(file) {
-            var reader = new FileReader();
-            reader.onload = function() {
-                var value = new Uint8Array(reader.result);
-                if (char_) {
-                    value = String.fromCharCode.apply(null, value);
-                }
-                callback(value, file.name);
-            };
-            reader.readAsArrayBuffer(file);
-        }
         for (var i = 0; i < input[0].files.length; i++) {
-            read(input[0].files[i]);
+            Sao.common.get_file_data(input[0].files[i], callback, char_);
         }
+    };
+
+    Sao.common.get_file_data = function(file, callback, char_) {
+        var reader = new FileReader();
+        reader.onload = function() {
+            var value = new Uint8Array(reader.result);
+            if (char_) {
+                value = String.fromCharCode.apply(null, value);
+            }
+            callback(value, file.name);
+        };
+        reader.readAsArrayBuffer(file);
     };
 
     Sao.common.ellipsize = function(string, length) {

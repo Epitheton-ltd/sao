@@ -68,6 +68,13 @@ var Sao = {};
         };
     }
 
+    Sao.setdefault = function(object, key, value) {
+        if (!object.hasOwnProperty(key)) {
+            object[key] = value;
+        }
+        return object[key];
+    };
+
     // Ensure RichText doesn't use style with css
     try {
         document.execCommand('styleWithCSS', false, false);
@@ -118,7 +125,8 @@ var Sao = {};
         ClassConstructor._super = Parent.prototype;
         if (props) {
             for (var name in props) {
-                ClassConstructor.prototype[name] = props[name];
+                Object.defineProperty(ClassConstructor.prototype, name,
+                    Object.getOwnPropertyDescriptor(props, name));
             }
         }
         return ClassConstructor;
@@ -236,10 +244,9 @@ var Sao = {};
     Sao.config = {};
     Sao.config.limit = 1000;
     Sao.config.display_size = 20;
-    Sao.config.roundup = {};
-    Sao.config.roundup.url = 'http://bugs.tryton.org/roundup/';
-    Sao.config.title = 'EpiTryton';
-    Sao.config.icon_color = '#3465a4';
+    Sao.config.bug_url = 'https://bugs.tryton.org/';
+    Sao.config.title = 'EPIrp';
+    Sao.config.icon_colors = '#3465a4,#555753,#cc0000'.split(',');
     Sao.config.bus_timeout = 10 * 60 * 1000;
 
     Sao.i18n = i18n();
@@ -365,9 +372,10 @@ var Sao = {};
                 Sao.set_url(tab.get_url(), tab.name);
             }
         } else {
+            url = decodeURIComponent(url);
             for (var i = 0; i < Sao.Tab.tabs.length; i++) {
                 tab = Sao.Tab.tabs[i];
-                if (tab.get_url() == url) {
+                if (decodeURIComponent(tab.get_url()) == url) {
                     tab.show();
                     return;
                 }
@@ -413,6 +421,7 @@ var Sao = {};
                 attributes.domain = loads(params.domain || '[]');
                 attributes.context = loads(params.context || '{}');
                 attributes.context_model = params.context_model;
+                attributes.tab_domain = loads(params.tab_domain || '[]');
             } catch (e) {
                 return;
             }
@@ -686,6 +695,7 @@ var Sao = {};
         form.view_prm.done(function() {
             var view = form.screen.current_view;
             view.table.removeClass('table table-bordered table-striped');
+            view.table.addClass('no-responsive');
             view.table.find('thead').hide();
             var gs = new Sao.GlobalSearch();
             jQuery('#global-search').children().remove();
@@ -874,7 +884,7 @@ var Sao = {};
             var ir_model = new Sao.Model('ir.model');
             return ir_model.execute('global_search',
                     [text, Sao.config.limit, Sao.main_menu_screen.model_name],
-                    Sao.main_menu_screen.context())
+                    Sao.main_menu_screen.context)
                 .then(function(s_results) {
                 var results = [];
                 for (var i=0, len=s_results.length; i < len; i++) {
@@ -974,13 +984,13 @@ var Sao = {};
                 label: Sao.i18n.gettext('Print'),
                 id: 'print',
             }, {
-                shortcut: 'ctrl+left',
+                shortcut: 'alt+shift+tab',
                 label: Sao.i18n.gettext('Previous tab'),
                 callback: function() {
                     Sao.Tab.previous_tab();
                 },
             }, {
-                shortcut: 'ctrl+right',
+                shortcut: 'alt+tab',
                 label: Sao.i18n.gettext('Next tab'),
                 callback: function() {
                     Sao.Tab.next_tab();
@@ -989,6 +999,7 @@ var Sao = {};
                 shortcut: 'ctrl+k',
                 label: Sao.i18n.gettext('Global search'),
                 callback: function() {
+                    jQuery('#main_navbar:hidden').collapse('show');
                     jQuery('#global-search-entry').focus();
                 },
             }, {
@@ -1076,6 +1087,8 @@ var Sao = {};
         dialog.modal.modal('show');
         return false;
     }
+
+    Sao.Plugins = [];
 
     // Fix stacked modal
     jQuery(document)
